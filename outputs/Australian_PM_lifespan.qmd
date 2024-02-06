@@ -3,16 +3,17 @@ title: "Australian Prime Minister Lifespan Web Scraping"
 author: "Mary Cheng"
 date: today
 date-format: long
-thanks: "Code and data are avaliable at:"
+thanks: "Code and data are avaliable at:https://github.com/marycx/Australian_PM_lifespan.git"
 purpose: "Scrape data from Wikipedia on information about how long prime ministers of Australia lived."
 format: pdf
+bibliography: ref.bib
 ---
 
 ## Introduction
 
-This report uses web scraping techniques in R to gather information on the lifespan of Australian prime ministers. The lifespan of these prime ministers can provide insights into political trends, societal changes, and the impact of various factors on the longevity of people as the technology develops.
+This report uses web scraping techniques in R [@citeR] to gather information on the lifespan of Australian prime ministers. The lifespan of these prime ministers can provide insights into political trends, societal changes, and the impact of various factors on the longevity of people as the technology develops.
 
-This report is going to first scrape the data on Wikipedia page, then clean the data to only include things we are interested in, and then plot a graph to illustrate the dataset.
+This report is going to first scrape the data on Wikipedia page [@citeWiki], then clean the data to only include things we are interested in, and then plot a graph to illustrate the dataset.
 
 ```{r}
 #| message: FALSE
