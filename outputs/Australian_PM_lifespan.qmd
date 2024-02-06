@@ -1,0 +1,195 @@
+---
+title: "Australian Prime Minister Lifespan Web Scraping"
+author: "Mary Cheng"
+date: today
+date-format: long
+thanks: "Code and data are avaliable at:"
+purpose: "Scrape data from Wikipedia on information about how long prime ministers of Australia lived."
+format: pdf
+---
+
+## Introduction
+
+This report uses web scraping techniques in R to gather information on the lifespan of Australian prime ministers. The lifespan of these prime ministers can provide insights into political trends, societal changes, and the impact of various factors on the longevity of people as the technology develops.
+
+This report is going to first scrape the data on Wikipedia page, then clean the data to only include things we are interested in, and then plot a graph to illustrate the dataset.
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# Load necessary libraries
+
+library(tidyverse)
+library(rvest)
+library(babynames)
+library(janitor)
+library(xml2)
+library(knitr)
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# Simulate data:
+# create a table that has 4 columns: name, birth year, death year, and year lived.
+
+# I used package called babynames for simulated data
+# For birth year, I assume they were born between 1800 to 1950. Assume that they lived between 60 to 100 years.
+set.seed(853)
+
+simulated_dataset <-
+  tibble(
+    prime_minister = babynames |>
+      filter(prop > 0.01) |>
+      distinct(name) |>
+      unlist() |>
+      sample(size = 10, replace = FALSE),
+    birth_year = sample(1800:1950, size = 10, replace = TRUE),
+    years_lived = sample(60:100, size = 10, replace = TRUE),
+    death_year = birth_year + years_lived
+  ) |>
+  select(prime_minister, birth_year, death_year, years_lived) |>
+  arrange(birth_year)
+
+simulated_dataset
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# read data from Australian PM Wikipedia page
+
+raw_data <-
+  read_html(
+    "https://en.wikipedia.org/wiki/List_of_prime_ministers_of_Australia"
+  )
+write_html(raw_data, "pms.html")
+
+raw_data <- read_html("pms.html")
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# Use selector gadget to pick and choose the elements I need
+
+parse_data_selector_gadget <-
+  raw_data |>
+  html_element(".wikitable") |>
+  html_table()
+
+head(parse_data_selector_gadget)
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# select the column that contains the birth year and death year of PMs, and then clean the column name
+
+parsed_data <-
+  parse_data_selector_gadget |> 
+  clean_names() |> 
+  rename(raw_text = name_birth_death_constituency) |> 
+  select(raw_text) |> 
+  filter(raw_text != "Name(Birth–Death)Constituency") |> 
+  distinct() 
+
+# check if it looks correct
+head(parsed_data)
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# use separate() becuase the names and dates can be separated by curly bracket (. Also extract the year by looking for 4 digits in a row, followed by a dash, and then 4 digits using str_extract().
+# if PM is still alive, it has a different format to extract.
+
+initial_clean <-
+  parsed_data |>
+  separate(
+    raw_text, into = c("name", "not_name"), sep = "\\(", extra = "merge",
+  ) |> 
+  mutate(date = str_extract(not_name, "[[:digit:]]{4}–[[:digit:]]{4}"),
+         born = str_extract(not_name, "b.[[:space:]][[:digit:]]{4}")
+         ) |>
+  select(name, date, born)
+  
+# check if it looks correct
+head(initial_clean)
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# clean up the columns
+
+cleaned_data <-
+  initial_clean |>
+  separate(date, into = c("birth", "died"), 
+           sep = "–") |>
+  mutate(
+    born = str_remove_all(born, "b.[[:space:]]"),
+    birth = if_else(!is.na(born), born, birth)
+  ) |> # if PM is alive, it has a different format
+  select(-born) |>
+  rename(born = birth) |> 
+  mutate(across(c(born, died), as.integer)) |> 
+  mutate(Age_at_Death = died - born) |> 
+  distinct() # if PM has two different values
+
+# check if it looks correct
+head(cleaned_data)
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+# Take a look at the cleaned dataset
+
+cleaned_data |>
+  head() |>
+  kable(
+    col.names = c("Prime Minister", "Birth year", "Death year", "Age at death")
+    )
+```
+
+```{r}
+#| message: FALSE
+#| echo: FALSE
+#| label: fig-age
+#| fig-cap: Lifespan of Australian prime ministers
+
+# Plot the graph that shows the lifespan of each PM in Australia
+# The graph is in two different colors; one represents PMs who are alive and one represents PMs who passed away.
+
+cleaned_data |>
+  mutate(
+    still_alive = if_else(is.na(died), "Yes", "No"),
+    died = if_else(is.na(died), as.integer(2024), died)
+  ) |>
+  mutate(name = as_factor(name)) |>
+  ggplot(
+    aes(x = born, xend = died, y = name, yend = name, color = still_alive)
+    ) +
+  geom_segment() +
+  labs(
+    x = "Year of birth", y = "Prime minister", color = "PM is currently alive"
+    ) +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "bottom")
+```
+
+## Findings
+
+@fig-age shows that 8 out of 31 prime ministers in Australia are still alive. The oldest alive prime minister is John Howard, who was born in 1939. The yougest alive prime minister is Scott Morrison, who was born in 1968.
+
+Not considering the Prime Ministers who are still alive and well, the longest lifespan is John Gorton who was born in 1911 and passed away in 2002. His age at death was 91 years old. The shortest lifespan is Harold Holt, who was born in 1908 and passed away in 1967. His age at death was 59 years old. It is observed that there is a trend of gradual rise in lifespans over the years, although some minor decreases in lifespan are also evident. This is normal since no one can control their lifespan or death. It can be seen that the most recent three prime ministers who passed away (Gough Whitlam, Malcolm Fraser, and Bob Hawke), their age at death was 98, 85, 90 respectively. It is possible that due to the modern technology and medical development, people's lifespan is increasing gradually.
+
+## Data Source
+
+The data was gathered from the Wikipedia page about Australian prime ministers. I first used rvest and then downloaded the page using read_html(). Then using selector gadget, I identified the items I want, which was the wikitable. It downloaded the entire table which contained a lot of information that I did not need. So I performed some data cleaning. I filtered the column that I was interested in, which was the called "Name(Birth–Death)Constituency". But this column contained both the name, birth year, death year of the prime minister. Therefore, I used separate() to separate the information into different columns. Then I performed some data cleaning to make sure column names make sense and the entries are correct. After making sure the cleaned data is correct, I plotted @fig-age to illustrate how long each prime minister lived. I used two different colors in the graph to differ prime ministers who are alive and who passed away.
+
+## Reflection
+
+The separating name and dates took longer than I expected, because I was unfamiliar with the str_extract() function and its argument format so I searched online for a long time to see how I should write it. It became fun when I finally figured out how to separate names and dates. When I saw the cleaned data, I felt very motivated and proud. Also, it was fun to finally make that graph and see the lifespan of prime ministers visually. Next time, I think I will try to change the ordering of the prime ministers. Right now, the ordering is what appears on Wikipedia page. I think I will try to arrange them based on their birth year, so that it would be clearer to see the general trend of lifespan when I plot the graph.
